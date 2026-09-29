@@ -39,6 +39,28 @@ export default function HeroSection() {
     };
   }, []);
 
+  // Trim playback to MEDIA.heroVideoEnd by jumping back to the start. Checked
+  // per frame where supported so the skipped tail never flashes on screen.
+  useEffect(() => {
+    const video = videoRef.current;
+    const end = MEDIA.heroVideoEnd;
+    if (!video || !end) return;
+    const loopIfPastEnd = () => {
+      if (video.currentTime >= end) video.currentTime = 0;
+    };
+    if ("requestVideoFrameCallback" in video) {
+      let handle;
+      const onFrame = () => {
+        loopIfPastEnd();
+        handle = video.requestVideoFrameCallback(onFrame);
+      };
+      handle = video.requestVideoFrameCallback(onFrame);
+      return () => video.cancelVideoFrameCallback(handle);
+    }
+    video.addEventListener("timeupdate", loopIfPastEnd);
+    return () => video.removeEventListener("timeupdate", loopIfPastEnd);
+  }, []);
+
   const handleScrollToWork = (e) => {
     e.preventDefault();
     const target =

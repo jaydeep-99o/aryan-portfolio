@@ -24,6 +24,9 @@ export const MEDIA = {
   avatar: "/avatar-logo.jpg",
   portrait: "/portrait.jpg",
   heroVideo: "/hero-bg-video.mp4",
+  // Loop back to the start at this many seconds, skipping the clip's tail
+  // (it fades into a glitchy double exposure after ~7.6s). null plays it all.
+  heroVideoEnd: 7.4,
   heroPoster: "/hero-poster.svg",
   favicon: "/icon.png",
 };
