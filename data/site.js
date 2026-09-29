@@ -13,7 +13,7 @@ export const PROFILE = {
 };
 
 export const SEO = {
-  title: "Aryan Bharambe | Financial & Equity Research Analyst",
+  title: "Aryan Bharambe | Financial & Business Analyst",
   description:
     "Aryan Bharambe is an MBA (Finance & Business Intelligence and Data Analytics) candidate with a B.Tech in Artificial Intelligence, combining financial analysis with data skills for equity research and financial analyst roles.",
 };
@@ -33,7 +33,7 @@ export const LOADER_TEXT = ["આર્યન પોર્ટફોલિયો",
 
 export const HERO = {
   eyebrow: "HELLO, I'M ARYAN",
-  lines: ["FINANCIAL", "& EQUITY"],
+  lines: ["FINANCIAL", "& BUSINESS"],
   mutedLine: "ANALYST",
   tagline: "MBA in Finance & Business Analytics with a B.Tech in AI, turning market data into investment insight.",
 };
