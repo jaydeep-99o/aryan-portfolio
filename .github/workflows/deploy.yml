@@ -1,0 +1,131 @@
+name: CI / Deploy to Vercel
+
+# Every push and pull request to main is built. Only pushes to main (or a
+# manual run on main) deploy to production. Vercel's own Git integration is
+# switched off in vercel.json, so this workflow is the single deploy path.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per ref at a time. PR runs are superseded by newer pushes; production
+# deploys queue instead of being cancelled halfway through.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 24
+  VERCEL_CLI_VERSION: 61
+  # Public production domain. Per-deployment URLs sit behind Vercel's login
+  # wall, so this is what the GitHub environment links to.
+  PRODUCTION_URL: https://aryan-bharambe.vercel.app
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Deploy to production
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ env.PRODUCTION_URL }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      # Validates the secrets and exports a cleaned VERCEL_TOKEN for later
+      # steps. The raw secret stays scoped to this step.
+      - name: Check Vercel secrets
+        env:
+          RAW_VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          missing=""
+          for name in RAW_VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            [ -z "${!name}" ] && missing="$missing ${name#RAW_}"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing. Add them under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          # Copy-paste often brings a stray space or newline, which the Vercel
+          # CLI rejects. Strip it, and mask the cleaned value since it no
+          # longer matches the registered secret exactly.
+          token=$(printf '%s' "$RAW_VERCEL_TOKEN" | tr -d '[:space:]')
+          echo "::add-mask::$token"
+          if [ "$token" != "$RAW_VERCEL_TOKEN" ]; then
+            echo "::notice::Removed whitespace from VERCEL_TOKEN. Consider re-saving the secret without it."
+          fi
+          case "$token" in
+            *-* | */*)
+              echo "::error::VERCEL_TOKEN contains '-' or '/', so it is not a Vercel access token. Create one at https://vercel.com/account/tokens and update the secret."
+              exit 1
+              ;;
+          esac
+          echo "VERCEL_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@${{ env.VERCEL_CLI_VERSION }}
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build with Vercel
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt output
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "Production: $PRODUCTION_URL"
+            echo ""
+            echo "Deployment (Vercel login required): $url"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test production
+        run: |
+          for attempt in 1 2 3 4 5; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' "$PRODUCTION_URL/")
+            if [ "$status" = "200" ]; then
+              echo "$PRODUCTION_URL responded 200 (attempt $attempt)"
+              exit 0
+            fi
+            echo "Attempt $attempt: HTTP $status, retrying in 5s"
+            sleep 5
+          done
+          echo "::error::$PRODUCTION_URL did not return 200 after deploy"
+          exit 1
