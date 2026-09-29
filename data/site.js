@@ -21,11 +21,11 @@ export const SEO = {
 // Swap these for real media when it's ready (drop files into /public).
 // Set heroVideo to null to show heroPoster instead, with no play button.
 export const MEDIA = {
-  avatar: "/avatar-logo.svg",
-  portrait: "/portrait.svg",
-  heroVideo: null,
+  avatar: "/avatar-logo.jpg",
+  portrait: "/portrait.jpg",
+  heroVideo: "/hero-bg-video.mp4",
   heroPoster: "/hero-poster.svg",
-  favicon: "/icon.svg",
+  favicon: "/icon.png",
 };
 
 // Loader cycles through these, one per second, before the hero reveals.
